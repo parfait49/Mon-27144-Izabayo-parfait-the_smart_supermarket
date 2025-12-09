@@ -37,6 +37,15 @@ This system resolves these issues using a full-featured Oracle database system w
 * Enable secure, traceable database operations
 * Support real-time insights for inventory and financials
 
+   CREATE PLUGGABLE DATABASE
+  SQL> CREATE PLUGGABLE DATABASE MON_27144_PARFAIT
+  2    ADMIN USER pdbadmin IDENTIFIED BY StrongPassword1
+  3    FILE_NAME_CONVERT = (
+  4      'C:\APP\P.A.R.F.A.I.T\PRODUCT\23AI\ORADATA\FREE\PDBSEED\',
+  5      'C:\APP\P.A.R.F.A.I.T\PRODUCT\23AI\ORADATA\FREE\MON_27144_PARFAIT\'
+  6    );
+
+
 🛍️ Target Users
 
 * Cashiers
