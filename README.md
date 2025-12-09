@@ -84,18 +84,102 @@ This system resolves these issues using a full-featured Oracle database system w
 * `add_invoice_detail`: Automates inserting invoice items while updating stock.
 
 💡 Functions:
+CREATE OR REPLACE FUNCTION get_invoice_total(p_invoice_id IN NUMBER)
+RETURN NUMBER IS
+    v_total NUMBER := 0;
+BEGIN
+    SELECT SUM(p.price * d.quantity)
+    INTO v_total
+    FROM INVOICE_DETAIL d
+    JOIN PRODUCT p ON d.product_id = p.product_id
+    WHERE d.invoice_id = p_invoice_id;
+
+    RETURN v_total;
+END;
 
 * `get_invoice_total`: Calculates the total value of a single invoice.
 
 👁️ Cursors:
+SET SERVEROUTPUT ON
+DECLARE
+    CURSOR low_stock_cursor IS
+        SELECT p.name, s.quantity
+        FROM PRODUCT p
+        JOIN STOCK s ON p.product_id = s.product_id
+        WHERE s.quantity < 10;
+
+    v_name PRODUCT.name%TYPE;
+    v_quantity STOCK.quantity%TYPE;
+BEGIN
+    OPEN low_stock_cursor;
+    LOOP
+        FETCH low_stock_cursor INTO v_name, v_quantity;
+        EXIT WHEN low_stock_cursor%NOTFOUND;
+        DBMS_OUTPUT.PUT_LINE('Low Stock - ' || v_name || ': ' || v_quantity);
+    END LOOP;
+    CLOSE low_stock_cursor;
+END;
+/
+
 
 * `low_stock_cursor`: Lists all products below threshold stock levels.
 
 📦 Packages:
+CREATE OR REPLACE PACKAGE supermarket_pkg AS
+    PROCEDURE add_invoice_p (
+        p_customer_id IN NUMBER,
+        p_employee_id IN NUMBER,
+        p_product_id IN NUMBER,
+        p_quantity IN NUMBER
+    );
+
+    FUNCTION calculate_invoice_total(p_invoice_id IN NUMBER) RETURN NUMBER;
+END;
+/
+
+-- Body
+CREATE OR REPLACE PACKAGE BODY supermarket_pkg AS
+    PROCEDURE add_invoice_p (
+        p_customer_id IN NUMBER,
+        p_employee_id IN NUMBER,
+        p_product_id IN NUMBER,
+        p_quantity IN NUMBER
+    ) IS
+    BEGIN
+        add_invoice(p_customer_id, p_employee_id, p_product_id, p_quantity);
+    END;
 
 * `Supermarket_Package`: Bundles procedures/functions for inventory and billing.
 
 🔐 Triggers:
+-- TRIGGER TO AUDIT PRODUCT TABLE CHANGES
+CREATE OR REPLACE TRIGGER trg_product_audit
+AFTER INSERT OR UPDATE OR DELETE ON PRODUCT
+FOR EACH ROW
+BEGIN
+    IF INSERTING THEN
+        INSERT INTO AUDIT_LOG (action, user_id)
+        VALUES ('Inserted product: ' || :NEW.name, NULL);
+    ELSIF UPDATING THEN
+        INSERT INTO AUDIT_LOG (action, user_id)
+        VALUES ('Updated product: ' || :OLD.name, NULL);
+    ELSIF DELETING THEN
+        INSERT INTO AUDIT_LOG (action, user_id)
+        VALUES ('Deleted product: ' || :OLD.name, NULL);
+    END IF;
+END;
+/
+
+-- TRIGGER TO UPDATE STOCK AFTER INVOICE DETAIL INSERTION
+CREATE OR REPLACE TRIGGER trg_invoice_detail_update_stock
+AFTER INSERT ON INVOICE_DETAIL
+FOR EACH ROW
+BEGIN
+    UPDATE STOCK
+    SET quantity = quantity - :NEW.quantity,
+        last_updated = SYSTIMESTAMP
+    WHERE product_id = :NEW.product_id;
+END;
 
 * `prevent_dml_on_holidays`: Blocks stock/invoice actions on holidays.
 * `log_user_action`: Inserts every sensitive DML into the `AUDIT_LOG`.
